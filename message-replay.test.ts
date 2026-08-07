@@ -1,5 +1,5 @@
 import { describe, test, expect, mock } from "bun:test"
-import { filterPartsByTier, replayWithDegradation } from "./message-replay"
+import { filterPartsByTier, replayWithDegradation, sanitizePartsForReplay } from "./message-replay"
 import type { MessagePart } from "./types"
 
 const textPart: MessagePart = { type: "text", text: "hello world" }
@@ -12,6 +12,24 @@ const textAndImageParts: MessagePart[] = [textPart, imagePart]
 const textOnlyParts: MessagePart[] = [textPart]
 
 describe("message-replay", () => {
+	describe("#given persisted message parts", () => {
+		test("#then replay preparation removes persistence identity fields", () => {
+			const persistedParts: MessagePart[] = [
+				{
+					type: "text",
+					text: "preserve this task prompt",
+					id: "prt_original",
+					sessionID: "ses_original",
+					messageID: "msg_original",
+				},
+			]
+
+			expect(sanitizePartsForReplay(persistedParts)).toEqual([
+				{ type: "text", text: "preserve this task prompt" },
+			])
+		})
+	})
+
 	describe("#given filterPartsByTier", () => {
 		describe("#when tier is 1 (all parts)", () => {
 			test("#then returns all parts unchanged", () => {

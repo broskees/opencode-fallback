@@ -2,6 +2,19 @@ import type { MessagePart, ReplayTier, ReplayResult } from "./types"
 
 const TIER_2_TYPES = new Set(["text", "image"])
 
+export function sanitizePartsForReplay(parts: MessagePart[]): MessagePart[] {
+	return parts.map((part) => {
+		const {
+			id: _id,
+			sessionID: _sessionID,
+			messageID: _messageID,
+			...inputPart
+		} = part
+
+		return inputPart as MessagePart
+	})
+}
+
 export function filterPartsByTier(parts: MessagePart[], tier: ReplayTier): MessagePart[] {
 	switch (tier) {
 		case 1:

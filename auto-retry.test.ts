@@ -54,6 +54,64 @@ function createMockDeps(overrides?: Partial<{
 
 describe("auto-retry integration", () => {
 	describe("#given autoRetryWithFallback with mixed parts", () => {
+		describe("#when two persisted subagent prompts fallback concurrently", () => {
+			test("#then both replays preserve their prompt with fresh part identity", async () => {
+				const dispatched = new Map<string, MessagePart[]>()
+				const deps = createMockDeps()
+				const prompts = new Map([
+					["ses_parallel_a", "parallel verifier prompt A"],
+					["ses_parallel_b", "parallel verifier prompt B"],
+				])
+
+				;(deps.ctx.client.session.messages as any).mockImplementation(
+					async ({ path }: { path: { id: string } }) => ({
+						data: [
+							{
+								info: { role: "user" },
+								parts: [
+									{
+										type: "text",
+										text: prompts.get(path.id),
+										id: `prt_${path.id}`,
+										sessionID: path.id,
+										messageID: `msg_${path.id}`,
+									},
+								],
+							},
+						],
+					})
+				)
+				;(deps.ctx.client.session.promptAsync as any).mockImplementation(
+					async ({ path, body }: { path: { id: string }; body: { parts: MessagePart[] } }) => {
+						dispatched.set(path.id, body.parts)
+					}
+				)
+
+				const helpers = createAutoRetryHelpers(deps)
+				await Promise.all([
+					helpers.autoRetryWithFallback(
+						"ses_parallel_a",
+						"openai/gpt-5.6-sol",
+						"verifier",
+						"message.updated"
+					),
+					helpers.autoRetryWithFallback(
+						"ses_parallel_b",
+						"openai/gpt-5.6-sol",
+						"verifier",
+						"message.updated"
+					),
+				])
+
+				expect(dispatched.get("ses_parallel_a")).toEqual([
+					{ type: "text", text: "parallel verifier prompt A" },
+				])
+				expect(dispatched.get("ses_parallel_b")).toEqual([
+					{ type: "text", text: "parallel verifier prompt B" },
+				])
+			})
+		})
+
 		describe("#when promptAsync succeeds on first call (Tier 1)", () => {
 			test("#then sends all original parts including non-text", async () => {
 				const mixedParts = [

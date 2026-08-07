@@ -196,6 +196,94 @@ describe("message-update-handler", () => {
 		})
 	})
 
+	describe("#given Claude Code returns a weekly limit as assistant text", () => {
+		test("#then dispatches the verifier fallback model from agent options", async () => {
+			const deps = createMockDeps()
+			const helpers = createMockHelpers()
+			const sessionID = "ses_verifier_weekly_limit"
+			const limitMessage = "You've hit your weekly limit · resets Aug 3, 5pm (America/New_York)"
+
+			deps.agentConfigs = {
+				verifier: {
+					model: "claude-code/claude-opus-5",
+					options: {
+						fallback_models: ["openai/gpt-5.6-sol"],
+					},
+				},
+			}
+			;(deps.ctx.client.session.messages as any).mockImplementation(async () => ({
+				data: [
+					{
+						info: { role: "assistant" },
+						parts: [{ type: "text", text: limitMessage }],
+					},
+				],
+			}))
+			;(helpers.resolveAgentForSessionFromContext as any).mockImplementation(
+				async () => "verifier"
+			)
+
+			const handler = createMessageUpdateHandler(deps, helpers)
+			await handler({
+				info: {
+					sessionID,
+					role: "assistant",
+					model: "claude-code/claude-opus-5",
+					agent: "verifier",
+				},
+				parts: [{ type: "text", text: limitMessage }],
+			})
+
+			expect(helpers.autoRetryWithFallback).toHaveBeenCalled()
+			const fallbackCall = (helpers.autoRetryWithFallback as any).mock.calls[0]
+			expect(fallbackCall[1]).toBe("openai/gpt-5.6-sol")
+		})
+	})
+
+	describe("#given Claude Code returns a session limit as assistant text", () => {
+		test("#then dispatches the verifier fallback model from agent options", async () => {
+			const deps = createMockDeps()
+			const helpers = createMockHelpers()
+			const sessionID = "ses_verifier_session_limit"
+			const limitMessage = "You've hit your session limit · resets 2:10pm (America/New_York)"
+
+			deps.agentConfigs = {
+				verifier: {
+					model: "claude-code/claude-opus-5",
+					options: {
+						fallback_models: ["openai/gpt-5.6-sol"],
+					},
+				},
+			}
+			;(deps.ctx.client.session.messages as any).mockImplementation(async () => ({
+				data: [
+					{
+						info: { role: "assistant" },
+						parts: [{ type: "text", text: limitMessage }],
+					},
+				],
+			}))
+			;(helpers.resolveAgentForSessionFromContext as any).mockImplementation(
+				async () => "verifier"
+			)
+
+			const handler = createMessageUpdateHandler(deps, helpers)
+			await handler({
+				info: {
+					sessionID,
+					role: "assistant",
+					model: "claude-code/claude-opus-5",
+					agent: "verifier",
+				},
+				parts: [{ type: "text", text: limitMessage }],
+			})
+
+			expect(helpers.autoRetryWithFallback).toHaveBeenCalled()
+			const fallbackCall = (helpers.autoRetryWithFallback as any).mock.calls[0]
+			expect(fallbackCall[1]).toBe("openai/gpt-5.6-sol")
+		})
+	})
+
 	describe("#given createMessageUpdateHandler with assistant error", () => {
 		describe("#when error is retryable and fallback models exist", () => {
 			test("#then triggers fallback via autoRetryWithFallback", async () => {

@@ -55,6 +55,20 @@ describe("error-classifier", () => {
 				const error = { message: "API quota exceeded for this project" }
 				expect(isRetryableError(error, DEFAULT_CONFIG.retry_on_errors)).toBe(true)
 			})
+
+			test("#then returns true for Claude Code weekly limit messages", () => {
+				const error = {
+					message: "You've hit your weekly limit · resets Aug 3, 5pm (America/New_York)",
+				}
+				expect(isRetryableError(error, DEFAULT_CONFIG.retry_on_errors)).toBe(true)
+			})
+
+			test("#then returns true for Claude Code session limit messages", () => {
+				const error = {
+					message: "You've hit your session limit · resets 2:10pm (America/New_York)",
+				}
+				expect(isRetryableError(error, DEFAULT_CONFIG.retry_on_errors)).toBe(true)
+			})
 		})
 
 		describe("#when error has quota protection messages", () => {
@@ -437,6 +451,34 @@ describe("error-classifier", () => {
 			test("#then returns hasError false", () => {
 				const parts = [{ type: "text", text: "Normal response text" }]
 				expect(detectErrorInTextParts(parts).hasError).toBe(false)
+			})
+		})
+
+		describe("#when Claude Code returns a weekly limit as assistant text", () => {
+			test("#then detects a retryable usage limit", () => {
+				const result = detectErrorInTextParts([
+					{
+						type: "text",
+						text: "You've hit your weekly limit · resets Aug 3, 5pm (America/New_York)",
+					},
+				])
+
+				expect(result.hasError).toBe(true)
+				expect(result.errorType).toBe("usage_limit")
+			})
+		})
+
+		describe("#when Claude Code returns a session limit as assistant text", () => {
+			test("#then detects a retryable usage limit", () => {
+				const result = detectErrorInTextParts([
+					{
+						type: "text",
+						text: "You've hit your session limit · resets 2:10pm (America/New_York)",
+					},
+				])
+
+				expect(result.hasError).toBe(true)
+				expect(result.errorType).toBe("usage_limit")
 			})
 		})
 	})

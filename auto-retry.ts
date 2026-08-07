@@ -2,7 +2,7 @@ import type { HookDeps, MessagePart, FallbackPlan } from "./types"
 import { logInfo, logError } from "./logger"
 import { getFallbackModelsForSession, resolveAgentForSession } from "./config-reader"
 import { prepareFallback, planFallback, commitFallback, createFallbackState } from "./fallback-state"
-import { replayWithDegradation } from "./message-replay"
+import { replayWithDegradation, sanitizePartsForReplay } from "./message-replay"
 
 const SESSION_TTL_MS = 30 * 60 * 1000
 
@@ -623,9 +623,11 @@ export function createAutoRetryHelpers(deps: HookDeps) {
 				// Cast raw parts to MessagePart (runtime parts may have any shape).
 				// Filter out "compaction" type parts — these are internal to
 				// OpenCode's compaction and not replayable via promptAsync.
-				const allParts: MessagePart[] = replayPartsRaw.filter(
-					(p): p is MessagePart =>
-						typeof p.type === "string" && p.type !== "compaction"
+				const allParts = sanitizePartsForReplay(
+					replayPartsRaw.filter(
+						(p): p is MessagePart =>
+							typeof p.type === "string" && p.type !== "compaction"
+					)
 				)
 
 				logInfo(`Prepared replay payload (${source})`, {
