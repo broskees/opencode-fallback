@@ -284,6 +284,47 @@ describe("message-update-handler", () => {
 		})
 	})
 
+	describe("#given Claude Code returns an exhausted usage credits message", () => {
+		test("#then dispatches the plan fallback model", async () => {
+			const deps = createMockDeps()
+			const helpers = createMockHelpers()
+			const sessionID = "ses_plan_usage_credits"
+			const limitMessage = "You're out of usage credits. Run /usage-credits to keep using Fable 5 or /model to switch models."
+
+			deps.agentConfigs = {
+				plan: {
+					model: "claude-code/claude-fable-5",
+					fallback_models: ["anthropic/claude-fable-5"],
+				},
+			}
+			;(deps.ctx.client.session.messages as any).mockImplementation(async () => ({
+				data: [
+					{
+						info: { role: "assistant" },
+						parts: [{ type: "text", text: limitMessage }],
+					},
+				],
+			}))
+			;(helpers.resolveAgentForSessionFromContext as any).mockImplementation(
+				async () => "plan"
+			)
+
+			const handler = createMessageUpdateHandler(deps, helpers)
+			await handler({
+				info: {
+					sessionID,
+					role: "assistant",
+					model: "claude-code/claude-fable-5",
+					agent: "plan",
+				},
+			})
+
+			expect(helpers.autoRetryWithFallback).toHaveBeenCalled()
+			const fallbackCall = (helpers.autoRetryWithFallback as any).mock.calls[0]
+			expect(fallbackCall[1]).toBe("anthropic/claude-fable-5")
+		})
+	})
+
 	describe("#given createMessageUpdateHandler with assistant error", () => {
 		describe("#when error is retryable and fallback models exist", () => {
 			test("#then triggers fallback via autoRetryWithFallback", async () => {

@@ -481,6 +481,20 @@ describe("error-classifier", () => {
 				expect(result.errorType).toBe("usage_limit")
 			})
 		})
+
+		describe("#when Claude Code returns an exhausted usage credits message", () => {
+			test("#then detects a retryable usage limit", () => {
+				const result = detectErrorInTextParts([
+					{
+						type: "text",
+						text: "You're out of usage credits. Run /usage-credits to keep using Fable 5 or /model to switch models.",
+					},
+				])
+
+				expect(result.hasError).toBe(true)
+				expect(result.errorType).toBe("usage_limit")
+			})
+		})
 	})
 
 	describe("#given extractErrorContentFromParts", () => {
