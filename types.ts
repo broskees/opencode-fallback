@@ -109,6 +109,8 @@ export interface PluginContext {
 				body: {
 					agent?: string
 					model: { providerID: string; modelID: string }
+					/** Reasoning-effort variant; omitted means the provider default. */
+					variant?: string
 					parts: MessagePart[]
 				}
 				query: { directory: string }

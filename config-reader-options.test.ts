@@ -1,5 +1,48 @@
 import { describe, test, expect } from "bun:test"
-import { getFallbackModelsForSession, readFallbackModels } from "./config-reader"
+import { getFallbackModelsForSession, readFallbackModels, readFallbackVariant } from "./config-reader"
+
+describe("config-reader fallback variants", () => {
+	const agents = {
+		builder: {
+			model: "claude-code/claude-opus-5-5",
+			variant: "xhigh",
+			options: {
+				fallback_models: [
+					{ model: "openai/gpt-6.1-sol", variant: "high" },
+					"openai/gpt-5.6-sol",
+					{ model: "openrouter/xiaomi/mimo-v2.6-pro" },
+				],
+			},
+		},
+	}
+
+	test("#then object entries count as models in the chain, in order", () => {
+		expect(readFallbackModels("builder", agents)).toEqual([
+			"openai/gpt-6.1-sol",
+			"openai/gpt-5.6-sol",
+			"openrouter/xiaomi/mimo-v2.6-pro",
+		])
+	})
+
+	test("#then an entry's variant is returned for its model", () => {
+		expect(readFallbackVariant("builder", agents, "openai/gpt-6.1-sol")).toBe("high")
+	})
+
+	test("#then entries without a variant return undefined", () => {
+		expect(readFallbackVariant("builder", agents, "openai/gpt-5.6-sol")).toBeUndefined()
+		expect(readFallbackVariant("builder", agents, "openrouter/xiaomi/mimo-v2.6-pro")).toBeUndefined()
+	})
+
+	test("#then recovering to the primary model uses the agent's own variant", () => {
+		expect(readFallbackVariant("builder", agents, "claude-code/claude-opus-5-5")).toBe("xhigh")
+	})
+
+	test("#then unknown agents and models return undefined", () => {
+		expect(readFallbackVariant("nobody", agents, "openai/gpt-6.1-sol")).toBeUndefined()
+		expect(readFallbackVariant("builder", agents, "openai/gpt-4o")).toBeUndefined()
+		expect(readFallbackVariant("builder", undefined, "openai/gpt-6.1-sol")).toBeUndefined()
+	})
+})
 
 describe("config-reader agent options fallback_models", () => {
 	describe("#given readFallbackModels", () => {

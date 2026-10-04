@@ -67,33 +67,40 @@ var SESSION_ID_NOISE_WORDS = new Set(["ses", "work", "task", "session"]);
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-function normalizeFallbackModelsField(value) {
+function toFallbackEntry(item) {
+  if (typeof item === "string")
+    return item ? { model: item } : undefined;
+  if (isRecord(item) && typeof item.model === "string" && item.model) {
+    return typeof item.variant === "string" && item.variant ? { model: item.model, variant: item.variant } : { model: item.model };
+  }
+  return;
+}
+function normalizeFallbackEntries(value) {
   if (!value)
     return [];
-  if (typeof value === "string")
-    return [value];
-  if (Array.isArray(value)) {
-    return value.filter((item) => typeof item === "string");
-  }
-  return [];
+  const items = Array.isArray(value) ? value : [value];
+  return items.map(toFallbackEntry).filter((entry) => entry !== undefined);
 }
-function readFallbackModelsFromAgentConfig(agentConfig) {
-  const directModels = normalizeFallbackModelsField(agentConfig.fallback_models);
-  if (directModels.length > 0)
-    return directModels;
+function normalizeFallbackModelsField(value) {
+  return normalizeFallbackEntries(value).map((entry) => entry.model);
+}
+function readFallbackEntriesFromAgentConfig(agentConfig) {
+  const directEntries = normalizeFallbackEntries(agentConfig.fallback_models);
+  if (directEntries.length > 0)
+    return directEntries;
   const options = agentConfig.options;
   if (isRecord(options)) {
-    const optionModels = normalizeFallbackModelsField(options.fallback_models);
-    if (optionModels.length > 0)
-      return optionModels;
+    const optionEntries = normalizeFallbackEntries(options.fallback_models);
+    if (optionEntries.length > 0)
+      return optionEntries;
   }
   const request = agentConfig.request;
   if (isRecord(request)) {
     const body = request.body;
     if (isRecord(body)) {
-      const bodyModels = normalizeFallbackModelsField(body.fallback_models);
-      if (bodyModels.length > 0)
-        return bodyModels;
+      const bodyEntries = normalizeFallbackEntries(body.fallback_models);
+      if (bodyEntries.length > 0)
+        return bodyEntries;
     }
   }
   return [];
@@ -104,7 +111,21 @@ function readFallbackModels(agentName, agents) {
   const agentConfig = agents[agentName];
   if (!isRecord(agentConfig))
     return [];
-  return readFallbackModelsFromAgentConfig(agentConfig);
+  return readFallbackEntriesFromAgentConfig(agentConfig).map((entry) => entry.model);
+}
+function readFallbackVariant(agentName, agents, model) {
+  if (!agents)
+    return;
+  const agentConfig = agents[agentName];
+  if (!isRecord(agentConfig))
+    return;
+  const entry = readFallbackEntriesFromAgentConfig(agentConfig).find((candidate) => candidate.model === model);
+  if (entry?.variant)
+    return entry.variant;
+  if (agentConfig.model === model && typeof agentConfig.variant === "string" && agentConfig.variant) {
+    return agentConfig.variant;
+  }
+  return;
 }
 function resolveAgentForSession(sessionID, eventAgent) {
   if (eventAgent && eventAgent.trim().length > 0) {
@@ -436,6 +457,7 @@ function createAutoRetryHelpers(deps) {
       providerID: modelParts[0],
       modelID: modelParts.slice(1).join("/")
     };
+    const fallbackVariant = resolvedAgent ? readFallbackVariant(resolvedAgent, deps.agentConfigs, newModel) : undefined;
     const modelAlreadyStopped = source === "session.error" || source === "message.updated";
     const callerAlreadyAborted = source === "session.timeout";
     const mayHaveRecentAbort = source === "session.idle.silent-failure";
@@ -717,6 +739,7 @@ function createAutoRetryHelpers(deps) {
             logInfo(`Dispatching fallback replay (${source})`, {
               sessionID,
               model: newModel,
+              variant: fallbackVariant,
               agent: resolvedAgent,
               payload: summarizeParts(parts)
             });
@@ -725,6 +748,7 @@ function createAutoRetryHelpers(deps) {
               body: {
                 ...resolvedAgent ? { agent: resolvedAgent } : {},
                 model: fallbackModelObj,
+                ...fallbackVariant ? { variant: fallbackVariant } : {},
                 parts
               },
               query: { directory: ctx.directory }
@@ -981,7 +1005,7 @@ function classifyErrorType(error) {
   if (/model\s+(?:is\s+)?not\s+(?:found|supported|available)/i.test(message) || /the model .+ does not exist/i.test(message)) {
     return "model_not_found";
   }
-  if (/(?:you(?:'|\u2019)?ve|you have) hit your (?:session|daily|weekly|monthly) limit\b/i.test(message)) {
+  if (/(?:you(?:'|\u2019)?ve|you have) hit your (?:session|daily|weekly|monthly) limit\b/i.test(message) || /(?:you(?:'|\u2019)?re|you are) out of usage credits\b/i.test(message)) {
     return "usage_limit";
   }
   return;

@@ -1,6 +1,6 @@
 import type { HookDeps, MessagePart, FallbackPlan } from "./types"
 import { logInfo, logError } from "./logger"
-import { getFallbackModelsForSession, resolveAgentForSession } from "./config-reader"
+import { getFallbackModelsForSession, readFallbackVariant, resolveAgentForSession } from "./config-reader"
 import { prepareFallback, planFallback, commitFallback, createFallbackState } from "./fallback-state"
 import { replayWithDegradation, sanitizePartsForReplay } from "./message-replay"
 
@@ -235,6 +235,11 @@ export function createAutoRetryHelpers(deps: HookDeps) {
 			providerID: modelParts[0],
 			modelID: modelParts.slice(1).join("/"),
 		}
+		// Without an explicit variant the host runs the fallback at the
+		// provider's default effort, not the level the chain asked for.
+		const fallbackVariant = resolvedAgent
+			? readFallbackVariant(resolvedAgent, deps.agentConfigs, newModel)
+			: undefined
 
 		// ── TOP-LEVEL SESSION HANDLING ──
 		// Decide whether to abort based on model state, not session type.
@@ -644,6 +649,7 @@ export function createAutoRetryHelpers(deps: HookDeps) {
 						logInfo(`Dispatching fallback replay (${source})`, {
 							sessionID,
 							model: newModel,
+							variant: fallbackVariant,
 							agent: resolvedAgent,
 							payload: summarizeParts(parts),
 						})
@@ -652,6 +658,7 @@ export function createAutoRetryHelpers(deps: HookDeps) {
 							body: {
 								...(resolvedAgent ? { agent: resolvedAgent } : {}),
 								model: fallbackModelObj,
+								...(fallbackVariant ? { variant: fallbackVariant } : {}),
 								parts,
 							},
 							query: { directory: ctx.directory },

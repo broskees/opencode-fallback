@@ -56,6 +56,23 @@ A single string is accepted too:
 "fallback_models": "openai/gpt-4o"
 ```
 
+### Reasoning effort per fallback
+
+A fallback replays at the provider's default effort unless you name a
+variant. Write an entry as `{ "model", "variant" }` to pick one; plain strings
+and objects mix freely:
+
+```json
+"fallback_models": [
+  { "model": "openai/gpt-5.4", "variant": "xhigh" },
+  "kimi-for-coding/k2p5"
+]
+```
+
+When the chain comes back around to the agent's own `model`, the replay uses
+the agent's `variant`. Variants are honored in per-agent lists only; the global
+list accepts the object form but replays at default effort.
+
 ---
 
 ## Plugin Config File

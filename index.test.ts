@@ -88,6 +88,73 @@ describe("OpenCodeFallbackPlugin", () => {
 			})
 		})
 
+		describe("#when a fallback entry names a variant", () => {
+			const agentWithVariantChain = {
+				agent: {
+					builder: {
+						model: "claude-code/claude-opus-5-5",
+						variant: "xhigh",
+						options: {
+							fallback_models: [
+								{ model: "openai/gpt-6.1-sol", variant: "xhigh" },
+								"openai/gpt-5.6-sol",
+							],
+						},
+					},
+				},
+			}
+
+			const failPrimaryWithRateLimit = async (plugin: Awaited<ReturnType<typeof OpenCodeFallbackPlugin>>, sessionID: string) => {
+				;(ctx.client.session.messages as any).mockImplementation(() =>
+					Promise.resolve({
+						data: [{ info: { role: "user" }, parts: [{ type: "text", text: "hello" }] }],
+					})
+				)
+				await plugin.event({
+					event: {
+						type: "session.error",
+						properties: {
+							sessionID,
+							error: { statusCode: 429, message: "Rate limited" },
+							model: "claude-code/claude-opus-5-5",
+						},
+					},
+				})
+			}
+
+			it("#then the replay is sent with that variant", async () => {
+				const plugin = await OpenCodeFallbackPlugin(ctx)
+				plugin.config(agentWithVariantChain)
+
+				await failPrimaryWithRateLimit(plugin, "ses-builder-variant")
+
+				expect(ctx.client.session.promptAsync).toHaveBeenCalledTimes(1)
+				const promptArgs = (ctx.client.session.promptAsync as any).mock.calls[0][0]
+				expect(promptArgs.body.model).toEqual({ providerID: "openai", modelID: "gpt-6.1-sol" })
+				expect(promptArgs.body.variant).toBe("xhigh")
+			})
+
+			it("#then a plain string entry is sent without a variant", async () => {
+				const plugin = await OpenCodeFallbackPlugin(ctx)
+				plugin.config({
+					agent: {
+						builder: {
+							model: "claude-code/claude-opus-5-5",
+							variant: "xhigh",
+							options: { fallback_models: ["openai/gpt-5.6-sol"] },
+						},
+					},
+				})
+
+				await failPrimaryWithRateLimit(plugin, "ses-builder-plain")
+
+				expect(ctx.client.session.promptAsync).toHaveBeenCalledTimes(1)
+				const promptArgs = (ctx.client.session.promptAsync as any).mock.calls[0][0]
+				expect(promptArgs.body.model).toEqual({ providerID: "openai", modelID: "gpt-5.6-sol" })
+				expect("variant" in promptArgs.body).toBe(false)
+			})
+		})
+
 		describe("#when config hook is called with singular 'agent' key", () => {
 			it("#then captures agent configs from singular key", async () => {
 				const plugin = await OpenCodeFallbackPlugin(ctx)

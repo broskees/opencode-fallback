@@ -116,6 +116,8 @@ export interface PluginContext {
                         providerID: string;
                         modelID: string;
                     };
+                    /** Reasoning-effort variant; omitted means the provider default. */
+                    variant?: string;
                     parts: MessagePart[];
                 };
                 query: {
